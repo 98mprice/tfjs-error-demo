@@ -1,0 +1,74 @@
+<html>
+  <head>
+    <!-- Load TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@0.13.3/dist/tf.min.js"> </script>
+    <script src="https://cdn.jsdelivr.net/gh/nicolaspanel/numjs@0.15.1/dist/numjs.min.js"></script>
+
+    <script>
+      function randn_bm(min, max, skew) {
+          var u = 0, v = 0;
+          while(u === 0) u = Math.random(); //Converting [0,1) to (0,1)
+          while(v === 0) v = Math.random();
+          let num = Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
+
+          num = num / 10.0 + 0.5; // Translate to 0 -> 1
+          if (num > 1 || num < 0) num = randn_bm(min, max, skew); // resample between 0 and 1 if out of range
+          num = Math.pow(num, skew); // Skew
+          num *= max - min; // Stretch to fill range
+          num += min; // offset to min
+          return num;
+      }
+
+      async function predict() {
+        console.log('predict')
+        const model = await tf.loadModel('https://raw.githubusercontent.com/98mprice/sneaker-test/master/src/generator/model.json');
+
+        const batch_size = 64
+
+        // Generate noise
+        console.log('generating noise')
+        let noise = nj.zeros([batch_size, 1, 1, 100])
+        for (var i = 0; i < batch_size; i++) {
+          for (var j = 0; j < 100; j++) {
+            noise.set(i, 0, 0, j, randn_bm(-5, 5, 1))
+          }
+        }
+
+        let noise_tensor = tf.tensor4d(noise.tolist())
+        noise_tensor.print(true)
+
+        // Generate images
+        console.log('generating images')
+        let generated_images = model.predict(noise_tensor) //error here
+        generated_images.print(true)
+
+        let output_data = await generated_images.dataSync()
+        let preds = Array.prototype.slice.call(output_data);
+
+        // Draw image
+        console.log('drawing image')
+        var c=document.getElementById("myCanvas");
+        var ctx=c.getContext("2d");
+        var imgData=ctx.createImageData(256,256);
+        var count = 0;
+        for (var i=0;i<imgData.data.length;i+=4)
+          {
+            r = (preds[count] + 1)*127.5
+            g = (preds[count+1] + 1)*127.5
+            b = (preds[count+2] + 1)*127.5
+            imgData.data[i+0]=r;
+            imgData.data[i+1]=b;
+            imgData.data[i+2]=g;
+            imgData.data[i+3]=255;
+            count += 3
+          }
+        ctx.putImageData(imgData,0,0);
+      }
+    </script>
+  </head>
+
+  <body>
+    <canvas id="myCanvas" width="256" height="256" style="border:1px solid #d3d3d3;"></canvas>
+    <button onclick="predict()">predict</button>
+  </body>
+</html>
